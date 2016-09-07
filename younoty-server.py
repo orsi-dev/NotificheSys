@@ -5,19 +5,28 @@ from time import gmtime, strftime
 from tornado.options import parse_command_line, define,options
 from tornado import gen
 
+
 """
 
 **YouNoty**
 Real time notification system for IM and push notification based on tornado and redis
 orsidev on https://github.com/orsi-dev
 
+usage: python younoty-server.py --port=(int)
+
+:TODO = separate sender to receiver classes
+
+
 """
+
 REDIS_SERVER = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
 
-logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
+define('port', default=8888, help='run on the given port', type=int)
+
+logging.basicConfig(filename='YouNoty.log', format='%(asctime)s %(message)s', level=logging.DEBUG, filemode="a+") #configurazione file log
 
 
 #logging = logging.getLogger('base.tornado')
@@ -32,7 +41,10 @@ pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_conne
 SENDER Handler
 
 127.0.0.0.1:8888/msg?message={"client_id":"158","att_id":"13", "msg":"hello there"}
-==
+
+client_id = receiver id
+att_id = channel id
+
 127.0.0.0.1:8888/msg?message=eyJjbGllbnRfaWQiOiIxNTgiLCJhdHRfaWQiOiIxMyIsICJtc2ciOiJoZWxsbyB0aGVyZSJ9
 
 if client is offline store notification into redis list
@@ -70,29 +82,36 @@ class NewMessage(tornado.web.RequestHandler): #TODO convert json into base64 wit
             and publish data into redis channel or save into a list
 
         """
-        self.message = self.get_argument('message')
-        queryParDecoded = base64decoder_(str(self.message))
-        body_ = json.loads(eval(queryParDecoded))
-        #appendo i nuovi dati al json
-        body_["created_at"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        k = list(clients.keys())
+        try:
+            message = self.get_argument("message")
+            queryParDecoded = base64decoder_(str(message))
+            body_ = json.loads(str(queryParDecoded))
 
-        namespace_Redis_List = str(body_['att_id'])+':'+str(body_['client_id'])
+            #print(body_)
+            body_["created_at"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+            k = list(clients.keys())
 
-        if body_['client_id'] in k: #se l' utente a cui si vuole inviare il msg e' loggato
+            namespace_Redis_List = str(body_['att_id'])+':'+str(body_['client_id'])
 
-            with tornadoredis.Client(connection_pool=pool) as c:
+            if body_['client_id'] in k: #if user is logged in
 
-                foo = yield tornado.gen.Task(c.publish, str(body_['att_id']), message)
-                self.write('sent: %s' % (message))
-                self.finish(str(foo))
+                with tornadoredis.Client(connection_pool=pool) as c:
 
-        else: #altrimenti vai a scrivere su una lista di redis
-                body_["ricevuta"] = 0
-                r = redis.StrictRedis(host=REDIS_SERVER, port=REDIS_PORT, db=REDIS_DB)
-                r.lpush(namespace_Redis_List, json.dumps(body_))
-                self.write('sent: %s' % (json.dumps(body_)))
-                self.finish(str(r))
+                    foo = yield tornado.gen.Task(c.publish, str(body_['att_id']), queryParDecoded)
+                    #foo = yield tornado.gen.Task(c.publish, str(body_['att_id']), message)
+                    self.write('sent: %s' % (message))
+                    self.finish(str(foo))
+
+            else: # if user is out of dictionary
+                    body_["ricevuta"] = 0
+                    r = redis.StrictRedis(host=REDIS_SERVER, port=REDIS_PORT, db=REDIS_DB)
+                    r.lpush(namespace_Redis_List, json.dumps(body_))
+                    self.write('sent: %s' % (json.dumps(body_)))
+                    self.finish(str(r))
+        except Exception,e:
+            logging.debug(e)
+            print (e)
+            pass
 
 '''
 
@@ -100,6 +119,9 @@ RECEIVER Handler
 
 Json sample for subscription
 {"client_id" : "1","att_id" : "13"} = eyJjbGllbnRfaWQiIDogIjEiLCJhdHRfaWQiIDogIjEzIn0=
+
+client_id = receiver id
+att_id = channel id
 
 127.0.0.1:{websocketport}/ws-noty?UID=eyJjbGllbnRfaWQiIDogIjEiLCJhdHRfaWQiIDogIjEzIn0=
 
@@ -188,7 +210,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
                     r.lset(str(idatt)+':'+str(iduser), i, json.dumps(bodyNoty))
 
             else:
-                print('non esiste')
+                pass
 
             i += 1
 
@@ -220,15 +242,16 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
 
 application = tornado.web.Application([
-    (r'/ws-noty', WebSocketHandler), #RICEZIONE
-    (r'/msg', NewMessage), #INVIO
+    (r'/ws-noty', WebSocketHandler), #RICEVER
+    (r'/msg', NewMessage), #SENDER
 ])
 
 
 if __name__ == "__main__":
     tornado.options.parse_command_line()
     http_server = tornado.httpserver.HTTPServer(application)
-    c = http_server.listen(8888)
-    print '*** Websocket Server Started at %s***' + str(c)
+    c = http_server.listen(options.port)
+
+    print '*** YouNoty Server Started at ' + str(options.port) + ' port ***'
     tornado.ioloop.IOLoop.instance().start()
 
