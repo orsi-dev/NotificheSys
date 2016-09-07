@@ -8,7 +8,7 @@ from tornado.options import define,options
 
 '''
 **YouNoty**
-Real time notification system for IM and push notification based on tornado and redis
+Real time notification service for IM and push notification based on tornado and redis
 orsidev on https://github.com/orsi-dev
 '''
 REDIS_SERVER = '127.0.0.1'
