@@ -12,7 +12,7 @@ REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
 
-logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
+logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #file log configuration
 
 
 #logging = logging.getLogger('base.tornado')
@@ -27,7 +27,7 @@ pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_conne
 
 '''
 
- GESTIONE DELL' INVIO
+ SENDER Handler
 
 '''
 
@@ -77,7 +77,7 @@ class NewMessage(tornado.web.RequestHandler):
 
 '''
 
-GESTIONE DELLA RICEZIONE
+RECEIVER Handler
 
 '''
 
