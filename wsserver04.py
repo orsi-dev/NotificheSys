@@ -2,9 +2,8 @@ import tornado.ioloop, tornado.web, tornado.websocket, tornado.httpserver ,torna
 import logging, json, urlparse, redis
 import base64 as b64
 from time import gmtime, strftime
-from tornado.options import parse_command_line
+from tornado.options import parse_command_line, define,options
 from tornado import gen
-from tornado.options import define,options
 
 """
 
