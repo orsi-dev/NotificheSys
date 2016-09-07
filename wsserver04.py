@@ -32,6 +32,8 @@ pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_conne
 SENDER Handler
 
 127.0.0.0.1:8888/msg?message={"client_id":"158","att_id":"13", "msg":"hello there"}
+==
+127.0.0.0.1:8888/msg?message=eyJjbGllbnRfaWQiOiIxNTgiLCJhdHRfaWQiOiIxMyIsICJtc2ciOiJoZWxsbyB0aGVyZSJ9
 
 if client is offline store notification into redis list
 else send publish command with message to subscriber
