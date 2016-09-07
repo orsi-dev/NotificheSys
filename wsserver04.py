@@ -6,17 +6,19 @@ from tornado.options import parse_command_line
 from tornado import gen
 from tornado.options import define,options
 
-'''
+"""
+
 **YouNoty**
-Real time notification service for IM and push notification based on tornado and redis
+Real time notification system for IM and push notification based on tornado and redis
 orsidev on https://github.com/orsi-dev
-'''
+
+"""
 REDIS_SERVER = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
 
-logging.basicConfig(filename='YouNoty.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
+logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
 
 
 #logging = logging.getLogger('base.tornado')
@@ -26,42 +28,50 @@ clients = dict()
 
 pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_connections=20, wait_for_available=True)
 
-'''
+"""
 
 SENDER Handler
 
-127.0.0.0.1:8888/msg?message={"client_id":"158","att_id":"13"}
+127.0.0.0.1:8888/msg?message={"client_id":"158","att_id":"13", "msg":"hello there"}
 
 if client is offline store notification into redis list
 else send publish command with message to subscriber
 
 
+"""
 
-'''
+#metodo di conversione da base64
+def base64decoder_(string):
+   """
+       base64 decoder for sender and receiver strings
+       :type string: object
+   """
+   base_decode = string
+   decoded = b64.b64decode(base_decode)
+   return decoded
+
+
 
 class NewMessage(tornado.web.RequestHandler): #TODO convert json into base64 with base64decoder_
 
-    #metodo di conversione da base64
-    def base64decoder_(string):
-
-        base_decode = string
-        decoded = b64.b64decode(base_decode)
-        return decoded
-
-
     def check_origin(self, origin):
         """
-        Check if incoming connection is in supported domain
-        :param origin (str): Origin/Domain of connection
+            Check if incoming connection is in supported domain
+            :param origin (str): Origin/Domain of connection
         """
         return True
 
     @tornado.web.asynchronous
     @tornado.gen.engine
     def get(self):
+        """
+            method get to send the value of querystring argument (:message)
+            and publish data into redis channel or save into a list
 
-        message = self.get_argument('message')
-        body_ = json.loads(message)
+        """
+        self.message = self.get_argument('message')
+        queryParDecoded = base64decoder_(str(self.message))
+        body_ = json.loads(eval(queryParDecoded))
         #appendo i nuovi dati al json
         body_["created_at"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         k = list(clients.keys())
@@ -95,11 +105,6 @@ Json sample for subscription
 
 '''
 
-def base64decoder_(string):
-
-   base_decode = string
-   decoded = b64.b64decode(base_decode)
-   return decoded
 
 class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
@@ -114,12 +119,15 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self._connect_to_redis()
         #self._chkunread()
         self._getUnreadMesg(idatt=convQSD['att_id'], iduser=convQSD['client_id'])
+        self._chkunread(idatt=convQSD['att_id'], iduser=convQSD['client_id'])
         self._listen(att=convQSD['att_id'])
 
 
 
     def open(self, *args):
-
+        """
+            tornado open method get :UID argoument from querystring and open the websocket connection
+        """
         self.qrs = self.get_argument("UID")
         queryParDecoded = base64decoder_(str(self.qrs))
         convQSD = eval(queryParDecoded)
@@ -131,7 +139,8 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         """
-        :param message (str, not-parsed JSON): data from client (web browser)
+           TODO: DO EVERYTHING ON WEBSOCKET MESSAGE RECEIVED
+           :param message (str, not-parsed JSON): data from client (web browser)
         """
 
     @gen.coroutine
@@ -150,16 +159,17 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
     @tornado.gen.engine
     def _listen(self, att):
 
-        #yield tornado.gen.Task(self._redis_client.subscribe, 'REDIS_UPDATES_CHANNEL')   #yield tornado.gen.Task(self._redis_client.subscribe, 'REDIS_UPDATES_CHANNEL')
-        yield tornado.gen.Task(self._redis_client.subscribe, att)   #yield tornado.gen.Task(self._redis_client.subscribe, 'REDIS_UPDATES_CHANNEL')
+        yield tornado.gen.Task(self._redis_client.subscribe, att)
 
         self._redis_client.listen(self._on_update)
 
     @tornado.web.asynchronous
     @tornado.gen.engine
     def _getUnreadMesg(self,idatt ,iduser): #ritorna il contenuto delle notifiche da gestire
-
-
+        """
+        method for handling messages when the subscriber if offline
+        :param idatt = channel ; iduser = client_id
+        """
         r = yield tornado.gen.Task(self._redis_client.lrange, str(idatt)+':'+str(iduser), 0, -1)
 
         i = 0
@@ -184,7 +194,7 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
     @tornado.web.asynchronous
     @tornado.gen.engine
-    def _chkunread(self): #ritorna il numero di notifiche da gestire
+    def _chkunread(self,idatt,iduser): #ritorna il numero di notifiche da gestire
 
         yield tornado.gen.Task(self._redis_client.llen, '13:158')   #yield tornado.gen.Task(self._redis_client.subscribe, 'REDIS_UPDATES_CHANNEL')
 
@@ -209,8 +219,8 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
 
 application = tornado.web.Application([
-    (r'/ws-noty', WebSocketHandler), #receiver
-    (r'/msg', NewMessage), #sender
+    (r'/ws-noty', WebSocketHandler), #RICEZIONE
+    (r'/msg', NewMessage), #INVIO
 ])
 
 
@@ -218,6 +228,6 @@ if __name__ == "__main__":
     tornado.options.parse_command_line()
     http_server = tornado.httpserver.HTTPServer(application)
     c = http_server.listen(8888)
-    print '*** YouNoty Server Started at %s***' + str(c)
+    print '*** Websocket Server Started at %s***' + str(c)
     tornado.ioloop.IOLoop.instance().start()
 
