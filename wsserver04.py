@@ -16,7 +16,7 @@ REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
 
-logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
+logging.basicConfig(filename='YouNoty.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
 
 
 #logging = logging.getLogger('base.tornado')
