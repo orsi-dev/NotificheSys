@@ -4,15 +4,13 @@ import base64 as b64
 from time import gmtime, strftime
 from tornado.options import parse_command_line, define,options
 from tornado import gen
-
-
 """
 
 **YouNoty**
 Real time notification system for IM and push notification based on tornado and redis
 orsidev on https://github.com/orsi-dev
 
-usage: python younoty-server.py --port=(int)
+usage: python younoty.py --port=(int)
 
 :TODO = separate sender to receiver classes
 
@@ -26,13 +24,13 @@ REDIS_CHANNEL = None
 
 define('port', default=8888, help='run on the given port', type=int)
 
-logging.basicConfig(filename='YouNoty.log', format='%(asctime)s %(message)s', level=logging.DEBUG, filemode="a+") #configurazione file log
+logging.basicConfig(filename='younoty-error.log', format='%(asctime)s %(message)s', level=logging.DEBUG, filemode="a+") #configurazione file log
 
 
 #logging = logging.getLogger('base.tornado')
 
 # store clients in dictionary..
-clients = dict()
+clients = dict() #BISOGNA MAPPARE OGNI ATTIVITA SU UN PROCESSO
 
 pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_connections=20, wait_for_available=True)
 
@@ -84,11 +82,14 @@ class NewMessage(tornado.web.RequestHandler): #TODO convert json into base64 wit
         """
         try:
             message = self.get_argument("message")
+            
             queryParDecoded = base64decoder_(str(message))
+            
             body_ = json.loads(str(queryParDecoded))
 
             #print(body_)
             body_["created_at"] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+            
             k = list(clients.keys())
 
             namespace_Redis_List = str(body_['att_id'])+':'+str(body_['client_id'])
@@ -97,20 +98,31 @@ class NewMessage(tornado.web.RequestHandler): #TODO convert json into base64 wit
 
                 with tornadoredis.Client(connection_pool=pool) as c:
 
+                    r = redis.StrictRedis(host=REDIS_SERVER, port=REDIS_PORT, db=REDIS_DB) #redis persistance notification
+                    
+                    r.lpush(namespace_Redis_List, json.dumps(body_))
+
                     foo = yield tornado.gen.Task(c.publish, str(body_['att_id']), queryParDecoded)
-                    #foo = yield tornado.gen.Task(c.publish, str(body_['att_id']), message)
+                    
                     self.write('sent: %s' % (message))
+                    
                     self.finish(str(foo))
 
-            else: # if user is out of dictionary
+            else: #if user is out of dictionary
                     body_["ricevuta"] = 0
+                    
                     r = redis.StrictRedis(host=REDIS_SERVER, port=REDIS_PORT, db=REDIS_DB)
+                    
                     r.lpush(namespace_Redis_List, json.dumps(body_))
+                    
                     self.write('sent: %s' % (json.dumps(body_)))
+                    
                     self.finish(str(r))
+
         except Exception,e:
+           
             logging.debug(e)
-            print (e)
+
             pass
 
 '''
@@ -145,8 +157,6 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
         self._chkunread(idatt=convQSD['att_id'], iduser=convQSD['client_id'])
         self._listen(att=convQSD['att_id'])
 
-
-
     def open(self, *args):
         """
             tornado open method get :UID argoument from querystring and open the websocket connection
@@ -176,7 +186,9 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
                 self.write_message(message.body)
         except Exception, e:
+           
             logging.debug(e)
+            
             pass
 
     @tornado.gen.engine
@@ -238,20 +250,27 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
     def _connect_to_redis(self):
 
         self._redis_client = tornadoredis.Client(host=REDIS_SERVER, port=REDIS_PORT, selected_db=REDIS_DB)
+        
         self._redis_client.connect()
 
 
 application = tornado.web.Application([
+   
     (r'/ws-noty', WebSocketHandler), #RICEVER
+    
     (r'/msg', NewMessage), #SENDER
 ])
 
 
 if __name__ == "__main__":
+   
     tornado.options.parse_command_line()
+    
     http_server = tornado.httpserver.HTTPServer(application)
+    
     c = http_server.listen(options.port)
 
     print '*** YouNoty Server Started at ' + str(options.port) + ' port ***'
+    
     tornado.ioloop.IOLoop.instance().start()
 
