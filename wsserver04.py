@@ -11,7 +11,7 @@ from tornado.options import define,options
 Real time notification system for IM and push notification based on tornado and redis
 orsidev on https://github.com/orsi-dev
 '''
-REDIS_SERVER = '192.168.250.10'
+REDIS_SERVER = '127.0.0.1'
 REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
