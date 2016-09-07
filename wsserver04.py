@@ -6,20 +6,21 @@ from tornado.options import parse_command_line
 from tornado import gen
 from tornado.options import define,options
 
-
-REDIS_SERVER = '127.0.0.1'
+'''
+**YouNoty**
+Real time notification system for IM and push notification based on tornado and redis
+orsidev on https://github.com/orsi-dev
+'''
+REDIS_SERVER = '192.168.250.10'
 REDIS_PORT = 6379
 REDIS_DB = 1
 REDIS_CHANNEL = None
 
-logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #file log configuration
+logging.basicConfig(filename='YouMsg.log', format='%(asctime)s %(message)s', level=log.DEBUG, filemode="a+") #configurazione file log
 
 
 #logging = logging.getLogger('base.tornado')
-'''
-ESEMPIO DI JSON DA PASSARE PER LA SOTTOSCRIZIONE AL CANALE
-{"client_id" : "1","att_id" : "13", "msg": "testtesttestetst"}
-'''
+
 # store clients in dictionary..
 clients = dict()
 
@@ -27,11 +28,18 @@ pool = tornadoredis.ConnectionPool(host=REDIS_SERVER, port=REDIS_PORT, max_conne
 
 '''
 
- SENDER Handler
+SENDER Handler
+
+127.0.0.0.1:8888/msg?message={"client_id":"158","att_id":"13"}
+
+if client is offline store notification into redis list
+else send publish command with message to subscriber
+
+
 
 '''
 
-class NewMessage(tornado.web.RequestHandler):
+class NewMessage(tornado.web.RequestHandler): #TODO convert json into base64 with base64decoder_
 
     #metodo di conversione da base64
     def base64decoder_(string):
@@ -78,6 +86,12 @@ class NewMessage(tornado.web.RequestHandler):
 '''
 
 RECEIVER Handler
+
+Json sample for subscription
+{"client_id" : "1","att_id" : "13"} = eyJjbGllbnRfaWQiIDogIjEiLCJhdHRfaWQiIDogIjEzIn0=
+
+127.0.0.1:{websocketport}/ws-noty?UID=eyJjbGllbnRfaWQiIDogIjEiLCJhdHRfaWQiIDogIjEzIn0=
+
 
 '''
 
@@ -195,8 +209,8 @@ class WebSocketHandler(tornado.websocket.WebSocketHandler):
 
 
 application = tornado.web.Application([
-    (r'/ws-noty', WebSocketHandler), #RICEZIONE
-    (r'/msg', NewMessage), #INVIO
+    (r'/ws-noty', WebSocketHandler), #receiver
+    (r'/msg', NewMessage), #sender
 ])
 
 
@@ -204,6 +218,6 @@ if __name__ == "__main__":
     tornado.options.parse_command_line()
     http_server = tornado.httpserver.HTTPServer(application)
     c = http_server.listen(8888)
-    print '*** Websocket Server Started at %s***' + str(c)
+    print '*** YouNoty Server Started at %s***' + str(c)
     tornado.ioloop.IOLoop.instance().start()
 
